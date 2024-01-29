@@ -69,7 +69,8 @@ MainView::MainView(ConfigHelper *config, QWidget *parent)
     connect(worker, &NDIWorker::frameUpdated, this, &MainView::updateFrame);
 
     // Start worker thread
-    workerThread->start(ndiSource);
+    worker->setSourceName(ndiSource);
+    workerThread->start();
 //    emit startWorker();
 
 

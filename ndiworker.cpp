@@ -1,6 +1,10 @@
 #include "ndiworker.h"
 
-void NDIWorker::start(QString sourceName) {
+void NDIWorker::setSourceName(QString sourceName) {
+    this->sourceName = sourceName;
+}
+
+void NDIWorker::start() {
     run = true;
 
     // Initialize library

@@ -14,13 +14,17 @@ class NDIWorker : public QObject
     Q_OBJECT
     NDIlib_recv_instance_t pNDI_recv;
     bool run = false;
+    QString sourceName = "";
+
+public:
+    void setSourceName(QString sourceName);
 
 signals:
     void frameUpdated(const QImage &frame);
     void finished();
 
 public slots:
-    void start(QString sourceName);
+    void start();
     void stop();
 };
 
