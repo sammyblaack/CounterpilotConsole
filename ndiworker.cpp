@@ -22,6 +22,9 @@ void NDIWorker::start() {
 
      const NDIlib_source_t *p_sources = NULL;
      while (source == -1) {
+        if (run == false)
+            return;
+
          qDebug("Looking for sources...\n");
 
          NDIlib_find_wait_for_sources(pNDI_find, 1000);

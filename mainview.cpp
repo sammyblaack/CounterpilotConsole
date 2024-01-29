@@ -88,7 +88,6 @@ MainView::MainView(ConfigHelper *config, QWidget *parent)
     delete buttonTimer;
 
     // NDI
-
     worker->stop();
     workerThread->quit();
     workerThread->wait();

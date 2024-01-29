@@ -26,7 +26,7 @@ public:
         #ifdef __WIN32__
         filepath = "C:\\Users\\Sam\\Desktop\\CpConsole_Data\\device_config.json";
         #elif __linux__
-        filepath = "/boot/device_config.json";
+        filepath = "/boot/firmware/device_config.json";
         #endif
 
         file = new QFile(filepath);
