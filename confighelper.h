@@ -8,6 +8,8 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 
+#include <math.h>
+#include <string.h>
 
 
 class ConfigHelper : public QObject
@@ -23,7 +25,7 @@ public:
     explicit ConfigHelper(QObject *parent = nullptr) {
         #ifdef __WIN32__
         filepath = "C:\\Users\\Sam\\Desktop\\CpConsole_Data\\device_config.json";
-        #elif __LINUX__
+        #elif __linux__
         filepath = "/boot/device_config.json";
         #endif
 
@@ -84,7 +86,7 @@ public:
             // Get element name
             std::string name = cstr.substr(first+2, (last-2)-(first+2));
 
-            if (std::strcmp(name.c_str(), "console_id") == 0) {
+            if (strcmp(name.c_str(), "console_id") == 0) {
                 int console_id = root.value("console_id").toInt();
 
                 // Convert integer to string

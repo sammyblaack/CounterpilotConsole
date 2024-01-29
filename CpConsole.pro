@@ -16,8 +16,8 @@ SOURCES += \
     technicianview.cpp
 
 HEADERS += \
-    GoodOSC.h \
     confighelper.h \
+    goodosc.h \
     mainview.h \
     mainwindow.h \
     ndiworker.h \
@@ -28,7 +28,6 @@ FORMS += \
     technicianview.ui
 
 
-# win32 {
 win32:INCLUDEPATH += \
     "C:/Program Files/NDI/NDI 5 SDK/Include"
 
@@ -36,16 +35,13 @@ win32:LIBS += \
     "C:/Program Files/NDI/NDI 5 SDK/Lib/x64/Processing.NDI.Lib.x64.lib" \
     "C:/Program Files/NDI/NDI 5 SDK/Bin/x64/Processing.NDI.Lib.x64.dll"
 
-# # }
+linux:INCLUDEPATH += \
+    "/home/pi/NDI SDK for Linux/include"
 
-# linux {
-# INCLUDEPATH += \
-#     "/home/pi/NDI SDK for Linux/include"
+linux:LIBS += \
+    "/home/pi/NDI SDK for Linux/lib/aarch64-rpi4-linux-gnueabi/libndi.so" \
+    "/usr/local/lib/libpigpio.so"
 
-# LIBS += \
-#     "/home/pi/NDI SDK for Linux/lib/aarch64-rpi4-linux-gnueabi/libndi.so" \
-#     "/usr/local/lib/libpigpio.so"
-# }
 
 
 # Default rules for deployment.

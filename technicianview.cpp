@@ -16,6 +16,11 @@ TechnicianView::TechnicianView(ConfigHelper *config, QWidget *parent)
 
     // Populate fields with data from config
     populate();
+
+    // Start run loop for OSC and button polling
+     loopTimer = new QTimer(this);
+     connect(loopTimer, &QTimer::timeout, this, &TechnicianView::loop);
+     loopTimer->start(0);  // As fast as possible :)
 }
 
 void TechnicianView::populate() {
@@ -69,7 +74,7 @@ void TechnicianView::populate() {
         std::string name = cinfo.substr(first+2, (last-2)-(first+2));
 
         // Find element value and replace with value from config
-        if (std::strcmp(name.c_str(), "osc_host") == 0) {
+        if (strcmp(name.c_str(), "osc_host") == 0) {
             std::string val = "";
 
             // Check value exists and is a string
@@ -81,12 +86,12 @@ void TechnicianView::populate() {
             continue;
         }
 
-        if (std::strcmp(name.c_str(), "osc_host_port") == 0) {
+        if (strcmp(name.c_str(), "osc_host_port") == 0) {
             std::string val = "";
 
             // Check value exists and is a double
             if (config->getParameter("osc_host_port").isDouble()) {
-                int num_val = config->getParameter("osc_host_port").toInteger();
+                int num_val = config->getParameter("osc_host_port").toInt();
 
                 // Convert integer to string
                 char *val_ptr;
@@ -103,12 +108,12 @@ void TechnicianView::populate() {
             continue;
         }
 
-        if (std::strcmp(name.c_str(), "osc_port") == 0) {
+        if (strcmp(name.c_str(), "osc_port") == 0) {
             std::string val = "";
 
             // Check value exists and is a double
             if (config->getParameter("osc_port").isDouble()) {
-                int num_val = config->getParameter("osc_port").toInteger();
+                int num_val = config->getParameter("osc_port").toInt();
 
                 // Convert integer to string
                 char *val_ptr;
@@ -125,7 +130,7 @@ void TechnicianView::populate() {
             continue;
         }
 
-        if (std::strcmp(name.c_str(), "button_h_path") == 0) {
+        if (strcmp(name.c_str(), "button_h_path") == 0) {
             std::string val = "";
 
             // Check value exists and is a string
@@ -137,7 +142,7 @@ void TechnicianView::populate() {
             continue;
         }
 
-        if (std::strcmp(name.c_str(), "button_c_path") == 0) {
+        if (strcmp(name.c_str(), "button_c_path") == 0) {
             std::string val = "";
 
             // Check value exists and is a string
@@ -149,7 +154,7 @@ void TechnicianView::populate() {
             continue;
         }
 
-        if (std::strcmp(name.c_str(), "button_b_path") == 0) {
+        if (strcmp(name.c_str(), "button_b_path") == 0) {
             std::string val = "";
 
             // Check value exists and is a string
@@ -161,7 +166,7 @@ void TechnicianView::populate() {
             continue;
         }
 
-        if (std::strcmp(name.c_str(), "ndi_stream") == 0) {
+        if (strcmp(name.c_str(), "ndi_stream") == 0) {
             std::string val = "";
 
             // Check value exists and is a string
@@ -179,7 +184,7 @@ void TechnicianView::populate() {
 
     // Check value exists and is a double
     if (config->getParameter("console_id").isDouble()) {
-        int num_val = config->getParameter("console_id").toInteger();
+        int num_val = config->getParameter("console_id").toInt();
 
         // Convert integer to string
         char *val_ptr;
@@ -196,55 +201,125 @@ void TechnicianView::populate() {
     ui->infoTextEdit->setText(QString::fromStdString(cinfo));
 }
 
+
+// Input methods
+ void TechnicianView::loop() {
+    // This is a run loop for polling button presses and triggering OSC
+    static uint32_t hLastTick = 0;
+    static uint32_t cLastTick = 0;
+    static uint32_t bLastTick = 0;
+
+    // This is a bit of a hack, make sure we dont exit out straight away (ignore first button press)
+    static int hState = 0;
+    static int cState = 0;
+    static int bState = 0;
+
+
+
+    int hNewState = gpioRead(17);
+    int cNewState = gpioRead(22);
+    int bNewState = gpioRead(27);
+
+    uint32_t tick = gpioTick();
+
+    // Handle H Button
+    if (hNewState != hState) {
+        if (tick > hLastTick + 200000) { // uS
+            hLastTick = tick;
+
+            hState = hNewState;
+            if (hState == false)
+                handleButtonHPressed();
+        }
+    }
+
+    // Handle C Button
+    if (cNewState != cState) {
+        if (tick > cLastTick + 200000) { // uS
+            cLastTick = tick;
+
+            cState = cNewState;
+            if (cState == false)
+                handleButtonCPressed();
+        }
+    }
+
+    // Handle B Button
+    if (bNewState != bState) {
+        if (tick > bLastTick + 200000) { // uS
+            bLastTick = tick;
+
+            bState = bNewState;
+            if (bState == false)
+                handleButtonBPressed();
+        }
+    }
+ }
+
 void TechnicianView::keyPressEvent(QKeyEvent *event) {
     switch (event->nativeScanCode()) {
         case 331: {
             // Button H / Left
-            int val = 0;
-
-            if (config->getParameter("console_id").isDouble()) {
-                val = config->getParameter("console_id").toInteger();
-            }
-
-            // Clamp values
-            val--;
-            if (val < 1) val = 20;
-
-            // Update config and repopulate
-            config->setParameter("console_id", QJsonValue(val));
-            populate();
+            handleButtonHPressed();
             break;
         }
 
         case 336: {
             // Button C / Down
-            // Save config to file and close technician view
-            config->saveConfig();
-            emit transitionToMainView();
+            handleButtonCPressed();
             break;
         }
 
         case 333: {
             // Button B / Right
-            int val = 0;
-
-            if (config->getParameter("console_id").isDouble()) {
-                val = config->getParameter("console_id").toInteger();
-            }
-
-            // Clamp values
-            val++;
-            if (val > 20) val = 1;
-
-            // Update config and repopulate
-            config->setParameter("console_id", QJsonValue(val));
-            populate();
+            handleButtonBPressed();
             break;
         }
     }
 }
 
+void TechnicianView::handleButtonHPressed() {
+    int val = 0;
+
+    if (config->getParameter("console_id").isDouble()) {
+        val = config->getParameter("console_id").toInt();
+    }
+
+    // Clamp values
+    val--;
+    if (val < 1) val = 20;
+
+    // Update config and repopulate
+    config->setParameter("console_id", QJsonValue(val));
+    populate();
+}
+
+void TechnicianView::handleButtonCPressed() {
+    // Save config to file and close technician view
+    config->saveConfig();
+    emit transitionToMainView();
+}
+
+void TechnicianView::handleButtonBPressed() {
+    int val = 0;
+
+    if (config->getParameter("console_id").isDouble()) {
+        val = config->getParameter("console_id").toInt();
+    }
+
+    // Clamp values
+    val++;
+    if (val > 20) val = 1;
+
+    // Update config and repopulate
+    config->setParameter("console_id", QJsonValue(val));
+    populate();
+}
+
 TechnicianView::~TechnicianView()
 {
     delete ui;
+
+    loopTimer->stop();
+    delete loopTimer;
 }
