@@ -15,9 +15,10 @@
 
 #include <QThread>
 #include <QPainter>
-#include "ndiworker.h"
 
 #include "pigpio.h"
+
+#include <Processing.NDI.Lib.h>
 
 class MainView : public QWidget
 {
@@ -35,11 +36,16 @@ class MainView : public QWidget
     bool timerStarted = false;
 
     // NDI
-    QThread *workerThread;
-    NDIWorker *worker;
     QImage *frame;
+    NDIlib_find_instance_t pNDI_find = NULL;
+    NDIlib_recv_instance_t pNDI_recv = NULL;
+    
+    int source = -1;
+    uint32_t no_sources = 0;
+    QString sourceName = "";
 
     QString ndiSource;
+    QTimer *searchTimer;
 
     // OSC & Buttons
     GoodOSC *osc;
@@ -76,8 +82,8 @@ signals:
     void startWorker();
 
 public slots:
-     void updateFrame(const QImage &frame);
      void loop();
+     void searchSource();
 };
 
 #endif // MAINVIEW_H

@@ -12,7 +12,6 @@ SOURCES += \
     main.cpp \
     mainview.cpp \
     mainwindow.cpp \
-    ndiworker.cpp \
     technicianview.cpp
 
 HEADERS += \
@@ -20,7 +19,6 @@ HEADERS += \
     goodosc.h \
     mainview.h \
     mainwindow.h \
-    ndiworker.h \
     technicianview.h
 
 FORMS += \

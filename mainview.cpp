@@ -3,14 +3,20 @@
 MainView::MainView(ConfigHelper *config, QWidget *parent)
     : QWidget{parent}
 {
+
+    QPalette pal = QPalette();
+    pal.setColor(QPalette::Window, Qt::black);
+    this->setAutoFillBackground(true);
+    this->setPalette(pal);
+    
+
     // Store config class ptr
     this->config = config;
 
 
 
-    ndiSource = "";
     if (config->getParameter("ndi_stream").isString())
-        ndiSource = config->getParameter("ndi_stream").toString();
+        this->sourceName = config->getParameter("ndi_stream").toString();
 
     oscHostAddress = "";
     if (config->getParameter("osc_host").isString())
@@ -38,8 +44,6 @@ MainView::MainView(ConfigHelper *config, QWidget *parent)
 
 
 
-
-
     // Set focus policy so we can receive keyboard events
     this->setFocusPolicy(Qt::StrongFocus);
 
@@ -52,68 +56,94 @@ MainView::MainView(ConfigHelper *config, QWidget *parent)
     frame = new QImage(QSize(720, 720), QImage::Format_RGBA8888);
     frame->fill(Qt::black);
 
-    // Setup NDI worker thread
-    workerThread = new QThread();
-    worker = new NDIWorker();
-    worker->moveToThread(workerThread);
-
-    // Connect signals and slots to start worker and receive frames
-    connect(workerThread, &QThread::started, worker, &NDIWorker::start);
-    connect(worker, &NDIWorker::finished, workerThread, &QThread::quit);
-    connect(worker, &NDIWorker::finished, workerThread, &QThread::deleteLater);
-    connect(workerThread, &QThread::finished, workerThread, &QThread::deleteLater);
-
-//    connect(this, &MainView::startWorker, worker, &NDIWorker::start);
-//    connect(this, &MainView::stopWorker, worker, &NDIWorker::stop);
-
-    connect(worker, &NDIWorker::frameUpdated, this, &MainView::updateFrame);
-
-    // Start worker thread
-    worker->setSourceName(ndiSource);
-    workerThread->start();
-//    emit startWorker();
-
-
-    // Start run loop for OSC and button polling
-    loopTimer = new QTimer(this);
-    connect(loopTimer, &QTimer::timeout, this, &MainView::loop);
-    loopTimer->start(0);  // As fast as possible :)
 
     // Start OSC
     osc = new GoodOSC(QHostAddress::AnyIPv4, oscPort);
+
+
+    // Init NDI
+    if (!NDIlib_initialize())
+        exit(0);
+
+    // Create finder instance
+    pNDI_find = NDIlib_find_create_v2();
+    if (!pNDI_find)
+        exit(0);
+
+    searchTimer = new QTimer(this);
+    connect(searchTimer, &QTimer::timeout, this, &MainView::searchSource);
+    searchTimer->start(0);
+
+
+    // Start run loop for button polling and NDI
+    loopTimer = new QTimer(this);
+    connect(loopTimer, &QTimer::timeout, this, &MainView::loop);
+    loopTimer->start(0);  // As fast as possible :)
 }
 
  MainView::~MainView() {
-    buttonTimer->stop();
-    delete buttonTimer;
-
     // NDI
-    worker->stop();
-    workerThread->quit();
-    workerThread->wait();
+    searchTimer->stop();
+    delete searchTimer;
 
-    delete workerThread;
-    delete worker;
-    delete frame;
+    if (pNDI_recv != NULL)
+        NDIlib_recv_destroy(pNDI_recv);
+    NDIlib_destroy();
+
+
 
     // OSC & Buttons
     loopTimer->stop();
     delete loopTimer;
+
+    buttonTimer->stop();
+    delete buttonTimer;
  }
 
- void MainView::updateFrame(const QImage &frame) {
-     // Get new frame from NDI worker and repaint the widget
-     this->frame = new QImage(frame);
-     repaint();
- }
+
+void MainView::searchSource() {
+    // Find sources
+    const NDIlib_source_t *p_sources = NULL;
+
+    if (source == -1) {
+        NDIlib_find_wait_for_sources(pNDI_find, 1000);
+        p_sources = NDIlib_find_get_current_sources(pNDI_find, &no_sources);
+
+        for (uint32_t i = 0; i < no_sources; i++) {
+            if (strcmp(p_sources[i].p_ndi_name, this->sourceName.toStdString().c_str()) == 0) {
+                source = i;
+
+                // Create receiver
+                NDIlib_recv_create_v3_t opts;
+                opts.color_format = NDIlib_recv_color_format_RGBX_RGBA;
+
+                pNDI_recv = NDIlib_recv_create_v3(&opts);
+                if (!pNDI_recv)
+                    exit(0);
+
+                // Connect receiver to video source and destroy finder
+                NDIlib_recv_connect(pNDI_recv, p_sources + source);
+                NDIlib_find_destroy(pNDI_find);
+
+                // Stop timer
+                searchTimer->stop();
+                return;
+            }
+        }
+    }
+}
 
  void MainView::paintEvent(QPaintEvent *event) {
      QPainter painter(this);
+    
 
      // Resize frame to fill and center inside widget viewport
      QSize size = frame->size().scaled(width(), height(), Qt::KeepAspectRatioByExpanding);
      int x_offset = -(size.width()-width())/2;
      int y_offset = -(size.height()-height())/2;
+
+     painter.rotate(180);
+     painter.translate(-size.width(), -size.height());
 
      // Draw image inside widget viewport
      painter.drawImage(QRect(x_offset, y_offset, size.width(), size.height()), *frame);
@@ -140,7 +170,7 @@ MainView::MainView(ConfigHelper *config, QWidget *parent)
 
     // Handle H Button
     if (hNewState != hState) {
-        if (tick > hLastTick + 200000) { // uS
+        if (tick - hLastTick > 200000) { // uS
             hLastTick = tick;
 
             hState = hNewState;
@@ -153,7 +183,7 @@ MainView::MainView(ConfigHelper *config, QWidget *parent)
 
     // Handle C Button
     if (cNewState != cState) {
-        if (tick > cLastTick + 200000) { // uS
+        if (tick - cLastTick > 200000) { // uS
             cLastTick = tick;
 
             cState = cNewState;
@@ -166,7 +196,7 @@ MainView::MainView(ConfigHelper *config, QWidget *parent)
 
     // Handle B Button
     if (bNewState != bState) {
-        if (tick > bLastTick + 200000) { // uS
+        if (tick - bLastTick > 200000) { // uS
             bLastTick = tick;
 
             bState = bNewState;
@@ -174,6 +204,35 @@ MainView::MainView(ConfigHelper *config, QWidget *parent)
                 handleButtonBPressed();
             else
                 handleButtonBReleased();
+        }
+    }
+
+    // NDI
+    if (source != -1) {
+        NDIlib_video_frame_v2_t video_frame;
+        NDIlib_audio_frame_v2_t audio_frame;
+
+        switch (NDIlib_recv_capture_v2(pNDI_recv, &video_frame, &audio_frame, nullptr, 5000)) {
+
+        case NDIlib_frame_type_none:
+            break;
+
+        case NDIlib_frame_type_video:
+            delete this->frame;
+            this->frame = new QImage(video_frame.p_data, video_frame.xres, video_frame.yres, QImage::Format_RGBA8888);
+            repaint();
+
+            NDIlib_recv_free_video_v2(pNDI_recv, &video_frame);
+            break;
+
+        case NDIlib_frame_type_audio:
+            NDIlib_recv_free_audio_v2(pNDI_recv, &audio_frame);
+
+        case NDIlib_frame_type_metadata:
+        case NDIlib_frame_type_error:
+        case NDIlib_frame_type_status_change:
+        case NDIlib_frame_type_max:
+            break;
         }
     }
  }
